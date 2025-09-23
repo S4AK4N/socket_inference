@@ -39,7 +39,7 @@ socket_inference/
 ### 2. セットアップ
 ```bash
 # リポジトリクローン
-git clone https://github.com/yoshidarimare/socket_inference.git
+git clone https://github.com/S4AK4N/socket_inference.git
 cd socket_inference
 
 # 依存関係取得
@@ -49,133 +49,103 @@ go mod tidy
 go build -o main .
 ```
 
-### 3. サーバー起動
-```bash
-# デフォルト設定で起動
-./main
-
-# 環境変数でカスタマイズ
-BATCH_SIZE=20 FLUSH_TIMEOUT=1s ./main
-```
-
-### 4. テスト実行
-```bash
-# 基本的な動作確認
-./scripts/test_wallpunch.sh
-
-# パラメータチューニングテスト
-CLIENT_COUNT=5 ./scripts/tune_test.sh
-```
-
-## 📊 機能
-
-### ✅ 実装済み機能
-- **WebSocket音声ストリーミング**: リアルタイム音声データ受信
-- **音声バッチ処理**: 設定可能なバッチサイズとタイムアウト
-- **並行クライアント対応**: 複数クライアント同時接続
-- **推論処理パイプライン**: gRPC推論サーバー連携（プレースホルダー）
-- **パラメータチューニング**: 環境変数による動的設定
-- **パフォーマンス監視**: リアルタイム統計とメトリクス
-
-### 🔄 処理フロー
-1. クライアントがWebSocket接続 (`:8080/audio`)
-2. 音声データをバイナリ形式でストリーミング送信
-3. サーバーがデータをバッチ化（10チャンクまたは2秒タイムアウト）
-4. バッチを推論処理パイプラインに送信
-5. 結果をクライアントに返却（将来実装）
-
-## ⚙️ 設定
-
-### 環境変数
-| 変数名 | デフォルト値 | 説明 |
-|--------|-------------|------|
-| `SERVER_PORT` | `8080` | サーバーポート |
-| `BATCH_SIZE` | `10` | 音声バッチサイズ |
-| `FLUSH_TIMEOUT` | `2s` | バッチフラッシュタイムアウト |
-| `MAX_CLIENTS` | `100` | 最大同時接続数 |
-| `GRPC_SERVER` | `localhost:50051` | gRPCサーバーアドレス |
-
-詳細な設定については [docs/TUNING.md](docs/TUNING.md) を参照してください。
-
-## 🧪 テストとデバッグ
-
-### 基本テスト
+### 3. 基本実行
 ```bash
 # サーバー起動
-go run main.go
+./main
 
-# 別ターミナルで動作確認
+# 別ターミナルでテストクライアント実行
 go run cmd/test_client/main.go
 ```
 
-### パフォーマンステスト
-```bash
-# 高負荷テスト
-CLIENT_COUNT=20 CHUNK_INTERVAL=10ms ./scripts/tune_test.sh
+## 🔧 パラメータチューニング
 
-# スループットテスト  
-CHUNK_SIZE=8192 TEST_DURATION=60s ./scripts/tune_test.sh
+環境変数でシステム動作をカスタマイズできます：
+
+```bash
+# パラメータチューニング用クライアント実行
+CLIENT_COUNT=5 \
+BATCH_SIZE=15 \
+FLUSH_TIMEOUT=3s \
+go run cmd/tuning_client/main.go
 ```
 
-## 📚 ドキュメント
+### 利用可能な環境変数
 
-- [🏗️ アーキテクチャ設計](docs/ARCHITECTURE.md) - Clean Architecture実装詳細
-- [🔧 パラメータチューニング](docs/TUNING.md) - 性能最適化ガイド
-- [🧪 テストガイド](docs/TESTING.md) - テスト実行方法
-- [📡 API仕様](docs/API.md) - WebSocket API仕様
+| 環境変数 | デフォルト値 | 説明 |
+|----------|-------------|------|
+| `SERVER_PORT` | `8080` | WebSocketサーバーポート |
+| `CLIENT_COUNT` | `3` | 同時接続クライアント数 |
+| `BATCH_SIZE` | `10` | 音声チャンクバッチサイズ |
+| `FLUSH_TIMEOUT` | `2s` | バッチフラッシュタイムアウト |
+| `TEST_DURATION` | `30s` | テスト実行時間 |
 
-## 🔧 開発
+## 🧪 テストスクリプト
 
-### 依存関係管理
 ```bash
-# 依存関係更新
-go mod tidy
+# 壁打ちテスト（基本動作確認）
+./scripts/test_wallpunch.sh
 
-# セキュリティ検査
-go mod verify
+# パラメータチューニングテスト
+./scripts/tune_test.sh
 ```
 
-### コード品質
+## 📊 パフォーマンス監視
+
+システムは以下のメトリクスを自動収集します：
+
+- **スループット**: 秒間処理チャンク数
+- **レイテンシ**: リクエスト〜レスポンス時間
+- **エラー率**: 失敗リクエスト割合
+- **接続数**: アクティブWebSocket接続数
+
+## 🔗 ドキュメント
+
+詳細な技術仕様は以下をご覧ください：
+
+- [📋 API仕様](docs/API.md) - WebSocket APIの詳細仕様
+- [🏛️ アーキテクチャ設計](docs/ARCHITECTURE.md) - Clean Architecture実装詳細
+- [🧪 テスト戦略](docs/TESTING.md) - テストケースとシナリオ
+- [⚙️ チューニングガイド](docs/TUNING.md) - パフォーマンス最適化手順
+
+## 🛠️ 開発環境
+
+### 依存関係
+- `github.com/coder/websocket` - WebSocket実装
+- Go標準ライブラリ
+
+### ビルド・実行
 ```bash
-# フォーマット
-go fmt ./...
+# 開発用サーバー起動
+go run main.go
 
-# Lint検査
-golangci-lint run
+# プロダクションビルド  
+go build -ldflags="-s -w" -o socket_inference
 
-# テスト実行
+# テストスイート実行
 go test ./...
 ```
 
-## 🎯 今後の開発予定
-
-- [ ] 実際のgRPC推論サーバー実装
-- [ ] 音声形式対応拡張（WAV, MP3等）
-- [ ] 認証・認可機能
-- [ ] ヘルスチェックエンドポイント
-- [ ] Docker化対応
-- [ ] Kubernetes対応
-- [ ] モニタリング・ログ改善
-
-## 🤝 貢献
-
-プルリクエストやイシューは歓迎です！
+## 🤝 コントリビューション
 
 1. このリポジトリをフォーク
-2. 機能ブランチを作成 (`git checkout -b feature/amazing-feature`)
-3. 変更をコミット (`git commit -m 'Add some amazing feature'`)
+2. フィーチャーブランチ作成 (`git checkout -b feature/amazing-feature`)
+3. 変更をコミット (`git commit -m 'Add amazing feature'`)
 4. ブランチにプッシュ (`git push origin feature/amazing-feature`)
-5. プルリクエストを作成
+5. プルリクエスト作成
 
 ## 📄 ライセンス
 
-このプロジェクトはMITライセンスの下で公開されています。詳細は [LICENSE](LICENSE) ファイルを参照してください。
+このプロジェクトは [MIT License](LICENSE) の下で公開されています。
 
-## 🙏 謝辞
+## 🏷️ バージョン履歴
 
-- [Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html) by Robert C. Martin
-- [WebSocket library](https://github.com/coder/websocket) by Coder
+- **v1.0.0** - 初回リリース
+  - Clean Architecture実装
+  - WebSocket音声ストリーミング
+  - パラメータチューニング機能
+  - 並行テストクライアント
 
 ---
 
-**Built with ❤️ using Go and Clean Architecture principles**
+💡 **Tip**: 詳細な使用方法は各ドキュメントファイルをご確認ください。
