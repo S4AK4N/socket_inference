@@ -1,0 +1,36 @@
+name: Connection Pool Test
+
+on:
+  push:
+    branches: [ connection-pool ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  connection-pool-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+    
+    - name: Start server in background
+      run: |
+        go run main.go &
+        sleep 3
+        
+    - name: Test with 5 clients
+      run: CLIENT_COUNT=5 go run cmd/tuning_client/main.go
+      
+    - name: Test with 10 clients  
+      run: CLIENT_COUNT=10 go run cmd/tuning_client/main.go
+      
+    - name: Test with 25 clients
+      run: CLIENT_COUNT=25 go run cmd/tuning_client/main.go
+      
+    - name: Test with 50 clients
+      run: CLIENT_COUNT=50 go run cmd/tuning_client/main.go
