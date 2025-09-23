@@ -40,6 +40,17 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
+      - name: Debug workspace
+        run: |
+          echo "=== Workspace structure ==="
+          ls -la
+          echo "=== cmd directory ==="
+          ls -la cmd/
+          echo "=== tuning_client directory ==="
+          ls -la cmd/tuning_client/
+          echo "=== go.mod content ==="
+          cat go.mod
+
       - name: Build server
         run: go build -o server main.go
 
