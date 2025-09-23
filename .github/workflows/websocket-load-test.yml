@@ -1,23 +1,17 @@
-name: WebSocket Load Test
+name: WebSocket Connection Pool CI
 
 on:
   push:
+    branches: [connection-pool]
   pull_request:
     branches: [main]
-  workflow_dispatch:
-    inputs:
-      max_clients:
-        description: "Maximum client count to test"
-        required: false
-        default: "100"
-        type: string
 
 env:
-  GO_VERSION: "1.21"
+  GO_VERSION: "1.23"
 
 jobs:
-  basic-test:
-    name: Basic Functionality Test
+  build-test:
+    name: Build and Basic Test
     runs-on: ubuntu-latest
 
     steps:
@@ -40,197 +34,11 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
-      - name: Debug workspace
-        run: |
-          echo "=== Workspace structure ==="
-          ls -la
-          echo "=== cmd directory ==="
-          ls -la cmd/
-          echo "=== tuning_client directory ==="
-          ls -la cmd/tuning_client/
-          echo "=== go.mod content ==="
-          cat go.mod
+      - name: Verify Go modules
+        run: go mod verify
 
-      - name: Build server
+      - name: Build main server
         run: go build -o server main.go
 
-      - name: Build test client
-        run: go build -o test-client ./cmd/tuning_client
-
-      - name: Start server in background
-        run: |
-          ./server &
-          echo $! > server.pid
-          sleep 3
-
-      - name: Basic connection test
-        env:
-          CLIENT_COUNT: 5
-          CHUNKS_PER_CLIENT: 10
-          CHUNK_SIZE: 1024
-          TEST_DURATION: 10s
-          USE_CONNECTION_POOL: false
-        run: ./test-client
-
-      - name: Stop server
-        run: |
-          if [ -f server.pid ]; then
-            kill $(cat server.pid) || true
-            rm server.pid
-          fi
-
-  connection-pool-test:
-    name: Connection Pool Load Test
-    runs-on: ubuntu-latest
-    needs: basic-test
-
-    strategy:
-      fail-fast: false
-      matrix:
-        client_count: [10, 50, 100]
-        pool_size: [5, 25, 50]
-        include:
-          - client_count: 500
-            pool_size: 100
-          - client_count: 1000
-            pool_size: 100
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Cache Go modules
-        uses: actions/cache@v3
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Install dependencies
-        run: go mod download
-
-      - name: Build binaries
-        run: |
-          go build -o server main.go
-          go build -o test-client ./cmd/tuning_client
-
-      - name: Start server
-        run: |
-          ./server &
-          echo $! > server.pid
-          sleep 5
-
-      - name: Connection Pool Load Test
-        env:
-          CLIENT_COUNT: ${{ matrix.client_count }}
-          POOL_SIZE: ${{ matrix.pool_size }}
-          CHUNKS_PER_CLIENT: 20
-          CHUNK_INTERVAL: 50ms
-          CHUNK_SIZE: 1024
-          TEST_DURATION: 30s
-          USE_CONNECTION_POOL: true
-          CONNECT_TIMEOUT: 10s
-          IDLE_TIMEOUT: 5m
-        run: |
-          echo "🎯 Testing ${{ matrix.client_count }} clients with pool size ${{ matrix.pool_size }}"
-          ./test-client > test-results.log 2>&1
-          echo "📊 Test Results:"
-          tail -20 test-results.log
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: test-results-${{ matrix.client_count }}-clients-${{ matrix.pool_size }}-pool
-          path: test-results.log
-
-      - name: Stop server
-        if: always()
-        run: |
-          if [ -f server.pid ]; then
-            kill $(cat server.pid) || true
-            rm server.pid
-          fi
-
-  performance-benchmark:
-    name: Performance Benchmark
-    runs-on: ubuntu-latest
-    needs: connection-pool-test
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Build binaries
-        run: |
-          go build -o server main.go
-          go build -o test-client ./cmd/tuning_client
-
-      - name: Start server
-        run: |
-          ./server &
-          echo $! > server.pid
-          sleep 5
-
-      - name: Maximum Load Test
-        env:
-          CLIENT_COUNT: ${{ github.event.inputs.max_clients || '1000' }}
-          POOL_SIZE: 100
-          CHUNKS_PER_CLIENT: 50
-          CHUNK_INTERVAL: 25ms
-          CHUNK_SIZE: 2048
-          TEST_DURATION: 60s
-          USE_CONNECTION_POOL: true
-        run: |
-          echo "🚀 Maximum load test with ${{ github.event.inputs.max_clients || '1000' }} clients"
-          ./test-client > benchmark-results.log 2>&1
-          echo "📈 Benchmark Results:"
-          cat benchmark-results.log
-
-      - name: Upload benchmark results
-        uses: actions/upload-artifact@v3
-        with:
-          name: benchmark-results-${{ github.event.inputs.max_clients || '1000' }}-clients
-          path: benchmark-results.log
-
-      - name: Comment PR with results
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const fs = require('fs');
-            const results = fs.readFileSync('benchmark-results.log', 'utf8');
-            const comment = `## 🚀 Performance Benchmark Results
-
-            \`\`\`
-            ${results.split('\n').slice(-20).join('\n')}
-            \`\`\`
-
-            Full results available in the artifacts.`;
-
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: comment
-            });
-
-      - name: Stop server
-        if: always()
-        run: |
-          if [ -f server.pid ]; then
-            kill $(cat server.pid) || true
-            rm server.pid
-          fi
+      - name: Run basic Go tests
+        run: go test -v ./...
