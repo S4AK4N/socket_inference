@@ -44,7 +44,7 @@ jobs:
         run: go build -o server main.go
 
       - name: Build test client
-        run: go build -o test-client cmd/tuning_client/main.go
+        run: go build -o test-client ./cmd/tuning_client
 
       - name: Start server in background
         run: |
@@ -107,7 +107,7 @@ jobs:
       - name: Build binaries
         run: |
           go build -o server main.go
-          go build -o test-client cmd/tuning_client/main.go
+          go build -o test-client ./cmd/tuning_client
 
       - name: Start server
         run: |
@@ -165,7 +165,7 @@ jobs:
       - name: Build binaries
         run: |
           go build -o server main.go
-          go build -o test-client cmd/tuning_client/main.go
+          go build -o test-client ./cmd/tuning_client
 
       - name: Start server
         run: |
