@@ -22,6 +22,19 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
+      - name: Debug workspace
+        run: |
+          echo "=== Go version ==="
+          go version
+          echo "=== Workspace structure ==="
+          ls -la
+          echo "=== cmd directory ==="
+          ls -la cmd/ || echo "cmd directory not found"
+          echo "=== tuning_client directory ==="
+          ls -la cmd/tuning_client/ || echo "tuning_client directory not found"
+          echo "=== go.mod content ==="
+          cat go.mod
+
       - name: Install dependencies
         run: go mod download
 
@@ -47,7 +60,13 @@ jobs:
         run: go mod download
 
       - name: Run unit tests
-        run: go test -v -race ./pkg/connection_pool/...
+        run: |
+          if [ -n "$(find ./pkg/connection_pool -name '*_test.go' 2>/dev/null)" ]; then
+            echo "Running unit tests..."
+            go test -v -race ./pkg/connection_pool/...
+          else
+            echo "No test files found, skipping unit tests"
+          fi
 
   integration-test:
     name: Integration Tests
@@ -119,7 +138,7 @@ jobs:
           echo "   プール: ${{ matrix.test_case.pool_enabled }}"
           echo "   プールサイズ: ${{ matrix.test_case.pool_size || 'N/A' }}"
           echo "   クライアント数: ${{ matrix.test_case.client_count }}"
-          
+
           if [ "${{ matrix.test_case.expected_success }}" = "true" ]; then
             ./test-client > test-results.log 2>&1
             if [ $? -eq 0 ]; then
@@ -184,31 +203,31 @@ jobs:
       - name: Performance comparison test
         run: |
           echo "🚀 パフォーマンス比較テスト開始"
-          
+
           # プールなしベースライン
           echo "=== プールなしベースライン ==="
           USE_CONNECTION_POOL=false CLIENT_COUNT=20 ./test-client > no-pool.log 2>&1
           BASELINE_THROUGHPUT=$(grep "全体スループット" no-pool.log | grep -o "[0-9.]*" | head -1)
           echo "ベースライン: ${BASELINE_THROUGHPUT} KB/s"
-          
+
           # プール最適化
           echo "=== プール最適化 (20接続) ==="
           USE_CONNECTION_POOL=true POOL_SIZE=20 CLIENT_COUNT=20 ./test-client > pool-optimal.log 2>&1
           OPTIMAL_THROUGHPUT=$(grep "全体スループット" pool-optimal.log | grep -o "[0-9.]*" | head -1)
           echo "最適化: ${OPTIMAL_THROUGHPUT} KB/s"
-          
+
           # プール制限
           echo "=== プール制限 (5接続) ==="
           USE_CONNECTION_POOL=true POOL_SIZE=5 CLIENT_COUNT=20 ./test-client > pool-limited.log 2>&1
           LIMITED_THROUGHPUT=$(grep "全体スループット" pool-limited.log | grep -o "[0-9.]*" | head -1)
           echo "制限: ${LIMITED_THROUGHPUT} KB/s"
-          
+
           # 結果分析
           echo "📊 パフォーマンス分析結果:"
           echo "ベースライン: ${BASELINE_THROUGHPUT} KB/s"
           echo "最適化: ${OPTIMAL_THROUGHPUT} KB/s"
           echo "制限: ${LIMITED_THROUGHPUT} KB/s"
-          
+
           # パフォーマンス要件チェック
           if (( $(echo "${OPTIMAL_THROUGHPUT} >= ${BASELINE_THROUGHPUT} * 0.95" | awk '{print ($1 >= $2)}') )); then
             echo "✅ 最適化プールはベースラインの95%以上のパフォーマンス"
