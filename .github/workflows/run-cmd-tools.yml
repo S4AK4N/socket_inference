@@ -3,10 +3,48 @@ name: Run Tuning Client Tests
 on:
   push:
     branches: [add_Actions]
+  workflow_dispatch:
+    inputs:
+      client_count:
+        description: 'Number of clients to test'
+        required: false
+        default: '3,5,10'
+        type: string
+      chunks_per_client:
+        description: 'Chunks per client'
+        required: false
+        default: '15'
+        type: string
+      chunk_size:
+        description: 'Chunk size in bytes'
+        required: false
+        default: '1024'
+        type: string
+      test_duration:
+        description: 'Test duration in seconds'
+        required: false
+        default: '10'
+        type: string
+      pool_enabled:
+        description: 'Enable connection pool'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  # Default environment variables for tuning tests
+  CLIENT_COUNT: ${{ github.event.inputs.client_count || '3,5,10' }}
+  CHUNKS_PER_CLIENT: ${{ github.event.inputs.chunks_per_client || '15' }}
+  CHUNK_SIZE: ${{ github.event.inputs.chunk_size || '1024' }}
+  TEST_DURATION: ${{ github.event.inputs.test_duration || '10' }}
+  POOL_ENABLED: ${{ github.event.inputs.pool_enabled || 'true' }}
 
 jobs:
   run-tuning-client:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        client_count: [3, 5, 10, 25]
 
     steps:
       - name: Checkout code
@@ -20,20 +58,10 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
-      - name: Debug - Check workspace structure
+      - name: Verify files
         run: |
-          echo "=== Current directory ==="
-          pwd
-          echo "=== Directory listing ==="
-          ls -la
-          echo "=== cmd directory ==="
-          ls -la cmd/ || echo "cmd directory not found"
-          echo "=== cmd/tuning_client directory ==="
-          ls -la cmd/tuning_client/ || echo "cmd/tuning_client directory not found"
-          echo "=== Go module info ==="
-          go list -m
-          echo "=== All Go files ==="
-          find . -name "*.go" -type f
+          echo "Checking tuning client files..."
+          ls -la cmd/tuning_client/
 
       - name: Start server in background
         run: |
@@ -43,21 +71,17 @@ jobs:
           sleep 5
           echo "Server started with PID: $SERVER_PID"
 
-      - name: Run tuning client with different configurations
+      - name: Run tuning client test
         run: |
-          echo "=== Running tuning client tests ==="
-
-          echo "Test 1: Default settings"
-          timeout 30 bash -c "CLIENT_COUNT=3 go run cmd/tuning_client/main.go" || echo "Test completed"
-
-          echo "Test 2: 5 clients"
-          timeout 30 bash -c "CLIENT_COUNT=5 go run cmd/tuning_client/main.go" || echo "Test completed"
-
-          echo "Test 3: 10 clients"  
-          timeout 30 bash -c "CLIENT_COUNT=10 go run cmd/tuning_client/main.go" || echo "Test completed"
-
-          echo "Test 4: Different chunk settings"
-          timeout 30 bash -c "CLIENT_COUNT=3 CHUNKS_PER_CLIENT=10 CHUNK_SIZE=512 go run cmd/tuning_client/main.go" || echo "Test completed"
+          echo "=== Running tuning client test ==="
+          echo "Configuration:"
+          echo "  - Client count: ${{ matrix.client_count }}"
+          echo "  - Chunks per client: ${{ env.CHUNKS_PER_CLIENT }}"
+          echo "  - Chunk size: ${{ env.CHUNK_SIZE }}"
+          echo "  - Test duration: ${{ env.TEST_DURATION }}"
+          echo "  - Pool enabled: ${{ env.POOL_ENABLED }}"
+          
+          timeout 30 bash -c "CLIENT_COUNT=${{ matrix.client_count }} CHUNKS_PER_CLIENT=${{ env.CHUNKS_PER_CLIENT }} CHUNK_SIZE=${{ env.CHUNK_SIZE }} TEST_DURATION=${{ env.TEST_DURATION }} POOL_ENABLED=${{ env.POOL_ENABLED }} go run cmd/tuning_client/main.go" || echo "Test completed"
 
       - name: Stop server
         run: |
