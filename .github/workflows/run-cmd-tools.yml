@@ -42,13 +42,16 @@ env:
   POOL_ENABLED: ${{ github.event.inputs.pool_enabled || 'true' }}
 
 jobs:
-  run-tuning-client:
+  # 基本機能テスト（軽量・高速）
+  basic-test:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        client_count: [3, 5, 10, 25]
-
+        client_count: [1, 3, 5]
+        chunk_size: [512, 1024]
+        pool_enabled: [true, false]
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -74,17 +77,12 @@ jobs:
           sleep 5
           echo "Server started with PID: $SERVER_PID"
 
-      - name: Run tuning client test
+      - name: Run basic test
         run: |
-          echo "=== Running tuning client test ==="
-          echo "Configuration:"
-          echo "  - Client count: ${{ matrix.client_count }}"
-          echo "  - Chunks per client: ${{ env.CHUNKS_PER_CLIENT }}"
-          echo "  - Chunk size: ${{ env.CHUNK_SIZE }}"
-          echo "  - Test duration: ${{ env.TEST_DURATION }}"
-          echo "  - Pool enabled: ${{ env.POOL_ENABLED }}"
-
-          timeout 30 bash -c "CLIENT_COUNT=${{ matrix.client_count }} CHUNKS_PER_CLIENT=${{ env.CHUNKS_PER_CLIENT }} CHUNK_SIZE=${{ env.CHUNK_SIZE }} TEST_DURATION=${{ env.TEST_DURATION }} POOL_ENABLED=${{ env.POOL_ENABLED }} go run cmd/tuning_client/main.go" || echo "Test completed"
+          echo "=== Basic Test ==="
+          echo "Configuration: clients=${{ matrix.client_count }}, chunk_size=${{ matrix.chunk_size }}, pool=${{ matrix.pool_enabled }}"
+          
+          timeout 30 bash -c "CLIENT_COUNT=${{ matrix.client_count }} CHUNK_SIZE=${{ matrix.chunk_size }} POOL_ENABLED=${{ matrix.pool_enabled }} go run cmd/tuning_client/main.go" || echo "Test completed"
 
       - name: Stop server
         run: |
@@ -92,6 +90,137 @@ jobs:
             kill $(cat server.pid) || echo "Server already stopped"
             rm server.pid
           fi
+
+  # 中負荷テスト
+  medium-load-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        client_count: [10, 25, 50]
+        chunks_per_client: [10, 20, 50]
+        include:
+          - client_count: 50
+            chunks_per_client: 100
+            chunk_size: 2048
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.23"
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Start server in background
+        run: |
+          go run main.go &
+          SERVER_PID=$!
+          echo $SERVER_PID > server.pid
+          sleep 5
+          echo "Server started with PID: $SERVER_PID"
+
+      - name: Run medium load test
+        run: |
+          echo "=== Medium Load Test ==="
+          echo "Configuration: clients=${{ matrix.client_count }}, chunks=${{ matrix.chunks_per_client }}"
+          
+          timeout 60 bash -c "CLIENT_COUNT=${{ matrix.client_count }} CHUNKS_PER_CLIENT=${{ matrix.chunks_per_client }} CHUNK_SIZE=${{ matrix.chunk_size || '1024' }} go run cmd/tuning_client/main.go" || echo "Test completed"
+
+      - name: Stop server
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) || echo "Server already stopped"
+            rm server.pid
+          fi
+
+  # 高負荷・限界値テスト
+  stress-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 高クライアント数テスト
+          - client_count: 100
+            chunks_per_client: 5
+            chunk_size: 1024
+            test_name: "high-client-count"
+          # 大チャンク数テスト  
+          - client_count: 20
+            chunks_per_client: 200
+            chunk_size: 1024
+            test_name: "high-chunk-count"
+          # 大チャンクサイズテスト
+          - client_count: 10
+            chunks_per_client: 10
+            chunk_size: 8192
+            test_name: "large-chunk-size"
+          # 極限テスト
+          - client_count: 200
+            chunks_per_client: 10
+            chunk_size: 512
+            test_name: "extreme-client-count"
+          # 長時間テスト
+          - client_count: 25
+            chunks_per_client: 50
+            chunk_size: 1024
+            test_duration: 30
+            test_name: "long-duration"
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.23"
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Start server in background
+        run: |
+          go run main.go &
+          SERVER_PID=$!
+          echo $SERVER_PID > server.pid
+          sleep 5
+          echo "Server started with PID: $SERVER_PID"
+
+      - name: Run stress test (${{ matrix.test_name }})
+        run: |
+          echo "=== Stress Test: ${{ matrix.test_name }} ==="
+          echo "Configuration: clients=${{ matrix.client_count }}, chunks=${{ matrix.chunks_per_client }}, size=${{ matrix.chunk_size }}"
+          
+          timeout ${{ matrix.test_duration || 120 }} bash -c "CLIENT_COUNT=${{ matrix.client_count }} CHUNKS_PER_CLIENT=${{ matrix.chunks_per_client }} CHUNK_SIZE=${{ matrix.chunk_size }} TEST_DURATION=${{ matrix.test_duration || '10' }} go run cmd/tuning_client/main.go" || echo "Stress test completed"
+
+      - name: Stop server
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) || echo "Server already stopped"
+            rm server.pid
+          fi
+
+  # ビルドテスト
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.23"
+
+      - name: Install dependencies
+        run: go mod download
 
       - name: Build tuning client binary
         run: |
@@ -102,5 +231,5 @@ jobs:
       - name: Upload tuning client artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tuning-client-${{ matrix.client_count }}
+          name: tuning-client-binary
           path: tuning_client
