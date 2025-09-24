@@ -2,31 +2,33 @@ name: Run Tuning Client Tests
 
 on:
   push:
-    branches: [add_Actions]
+    branches: ['**']  # 全ブランチでのpush時に実行
+  pull_request:
+    branches: [main, develop]  # main, developへのマージ時に実行
   workflow_dispatch:
     inputs:
       client_count:
-        description: 'Number of clients to test'
+        description: "Number of clients to test"
         required: false
-        default: '3,5,10'
+        default: "3,5,10"
         type: string
       chunks_per_client:
-        description: 'Chunks per client'
+        description: "Chunks per client"
         required: false
-        default: '15'
+        default: "15"
         type: string
       chunk_size:
-        description: 'Chunk size in bytes'
+        description: "Chunk size in bytes"
         required: false
-        default: '1024'
+        default: "1024"
         type: string
       test_duration:
-        description: 'Test duration in seconds'
+        description: "Test duration in seconds"
         required: false
-        default: '10'
+        default: "10"
         type: string
       pool_enabled:
-        description: 'Enable connection pool'
+        description: "Enable connection pool"
         required: false
         default: true
         type: boolean
@@ -81,7 +83,7 @@ jobs:
           echo "  - Chunk size: ${{ env.CHUNK_SIZE }}"
           echo "  - Test duration: ${{ env.TEST_DURATION }}"
           echo "  - Pool enabled: ${{ env.POOL_ENABLED }}"
-          
+
           timeout 30 bash -c "CLIENT_COUNT=${{ matrix.client_count }} CHUNKS_PER_CLIENT=${{ env.CHUNKS_PER_CLIENT }} CHUNK_SIZE=${{ env.CHUNK_SIZE }} TEST_DURATION=${{ env.TEST_DURATION }} POOL_ENABLED=${{ env.POOL_ENABLED }} go run cmd/tuning_client/main.go" || echo "Test completed"
 
       - name: Stop server
