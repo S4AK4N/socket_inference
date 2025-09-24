@@ -43,6 +43,7 @@ jobs:
   run-tuning-client:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         client_count: [3, 5, 10, 25]
 
@@ -99,5 +100,5 @@ jobs:
       - name: Upload tuning client artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tuning-client
+          name: tuning-client-${{ matrix.client_count }}
           path: tuning_client
