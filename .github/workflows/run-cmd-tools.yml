@@ -1,0 +1,64 @@
+name: Run Tuning Client Tests
+
+on:
+  push:
+    branches: [add_Actions]
+
+jobs:
+  run-tuning-client:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.23"
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Start server in background
+        run: |
+          go run main.go &
+          SERVER_PID=$!
+          echo $SERVER_PID > server.pid
+          sleep 5
+          echo "Server started with PID: $SERVER_PID"
+
+      - name: Run tuning client with different configurations
+        run: |
+          echo "=== Running tuning client tests ==="
+
+          echo "Test 1: Default settings"
+          timeout 30s CLIENT_COUNT=3 go run cmd/tuning_client/main.go || echo "Test completed"
+
+          echo "Test 2: 5 clients"
+          timeout 30s CLIENT_COUNT=5 go run cmd/tuning_client/main.go || echo "Test completed"
+
+          echo "Test 3: 10 clients"  
+          timeout 30s CLIENT_COUNT=10 go run cmd/tuning_client/main.go || echo "Test completed"
+
+          echo "Test 4: Different chunk settings"
+          timeout 30s CLIENT_COUNT=3 CHUNKS_PER_CLIENT=10 CHUNK_SIZE=512 go run cmd/tuning_client/main.go || echo "Test completed"
+
+      - name: Stop server
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) || echo "Server already stopped"
+            rm server.pid
+          fi
+
+      - name: Build tuning client binary
+        run: |
+          echo "=== Building tuning client ==="
+          go build -o tuning_client cmd/tuning_client/main.go
+          ls -la tuning_client
+
+      - name: Upload tuning client artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: tuning-client
+          path: tuning_client
