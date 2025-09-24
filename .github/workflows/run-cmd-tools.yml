@@ -33,16 +33,16 @@ jobs:
           echo "=== Running tuning client tests ==="
 
           echo "Test 1: Default settings"
-          timeout 30s CLIENT_COUNT=3 go run cmd/tuning_client/main.go || echo "Test completed"
+          timeout 30 bash -c "CLIENT_COUNT=3 go run cmd/tuning_client/main.go" || echo "Test completed"
 
           echo "Test 2: 5 clients"
-          timeout 30s CLIENT_COUNT=5 go run cmd/tuning_client/main.go || echo "Test completed"
+          timeout 30 bash -c "CLIENT_COUNT=5 go run cmd/tuning_client/main.go" || echo "Test completed"
 
           echo "Test 3: 10 clients"  
-          timeout 30s CLIENT_COUNT=10 go run cmd/tuning_client/main.go || echo "Test completed"
+          timeout 30 bash -c "CLIENT_COUNT=10 go run cmd/tuning_client/main.go" || echo "Test completed"
 
           echo "Test 4: Different chunk settings"
-          timeout 30s CLIENT_COUNT=3 CHUNKS_PER_CLIENT=10 CHUNK_SIZE=512 go run cmd/tuning_client/main.go || echo "Test completed"
+          timeout 30 bash -c "CLIENT_COUNT=3 CHUNKS_PER_CLIENT=10 CHUNK_SIZE=512 go run cmd/tuning_client/main.go" || echo "Test completed"
 
       - name: Stop server
         run: |
@@ -54,7 +54,7 @@ jobs:
       - name: Build tuning client binary
         run: |
           echo "=== Building tuning client ==="
-          go build -o tuning_client cmd/tuning_client/main.go
+          go build -o tuning_client ./cmd/tuning_client
           ls -la tuning_client
 
       - name: Upload tuning client artifact
