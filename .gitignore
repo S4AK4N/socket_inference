@@ -5,8 +5,8 @@
 *.so
 *.dylib
 main
-tuning_client
-test_client
+/tuning_client
+/test_client
 
 # Test binary, built with `go test -c`
 *.test
